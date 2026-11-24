@@ -1,0 +1,46 @@
+name: Build CODE SOLO installer
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      GOOS: windows
+      GOARCH: amd64
+      CGO_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Check Go code
+        working-directory: source
+        run: go vet ./...
+
+      - name: Build CodeSolo.exe
+        working-directory: source
+        run: go build -ldflags "-H=windowsgui -s -w" -o ../installer/CodeSolo.exe .
+
+      - name: Make sure Inno Setup is installed
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
+
+      - name: Build Setup.exe
+        shell: pwsh
+        run: |
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" installer\CodeSolo.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CodeSolo-Setup
+          path: installer/output/*.exe
+          if-no-files-found: error
